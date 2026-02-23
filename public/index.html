@@ -99,14 +99,16 @@
         const meta = [];
         if (data.toolsUsed?.length)
           meta.push('Tools: ' + data.toolsUsed.join(', '));
+
         if (data.sources?.length)
+
           meta.push('Sources: ' + data.sources.join(', '));
         meta.push('Session: ' + data.sessionId);
         meta.push(data.timestamp);
 
         html += '<div class="meta">' + meta.join(' | ') + '</div>';
         html +=
-          '<details><summary>Raw JSON</summary><div class="raw">' +
+          '<details><summary>Raw JSON Response: </summary><div class="raw">' +
           escapeHtml(JSON.stringify(data, null, 2)) +
           '</div></details>';
 
