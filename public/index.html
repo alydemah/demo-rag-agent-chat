@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>HR Chatbot</title>
+    <style>
+      body {
+        font-family: monospace;
+        max-width: 800px;
+        margin: 20px auto;
+      }
+      #messages {
+        max-height: 500px;
+        overflow-y: auto;
+        border: 1px solid #ccc;
+        padding: 8px;
+        margin: 10px 0;
+      }
+      .msg {
+        margin: 8px 0;
+        padding: 6px;
+        border-bottom: 1px solid #eee;
+      }
+      .msg b {
+        display: block;
+        margin-bottom: 4px;
+      }
+      .meta {
+        font-size: 0.85em;
+        color: #666;
+        margin-top: 4px;
+      }
+      .raw {
+        background: #f5f5f5;
+        padding: 6px;
+        font-size: 0.8em;
+        white-space: pre-wrap;
+        word-break: break-all;
+        margin-top: 4px;
+        border: 1px solid #ddd;
+      }
+      details {
+        margin-top: 4px;
+      }
+      summary {
+        cursor: pointer;
+        font-size: 0.85em;
+        color: #666;
+      }
+    </style>
+  </head>
+  <body>
+    <h3>HR Chatbot</h3>
+
+    <div>
+      <label>Upload document: </label>
+      <input type="file" id="fileInput" accept=".pdf,.md,.txt" />
+      <span id="uploadStatus"></span>
+    </div>
+
+    <hr />
+
+    <div id="messages"></div>
+
+    <form id="chatForm">
+      <input
+        type="text"
+        id="messageInput"
+        placeholder="Ask a question..."
+        size="60"
+      />
+      <button type="submit">Send</button>
+    </form>
+
+    <script>
+      let sessionId = sessionStorage.getItem('chatSessionId') || '';
+
+      const messagesDiv = document.getElementById('messages');
+      const chatForm = document.getElementById('chatForm');
+      const messageInput = document.getElementById('messageInput');
+      const fileInput = document.getElementById('fileInput');
+      const uploadStatus = document.getElementById('uploadStatus');
+
+      function addUserMessage(text) {
+        const div = document.createElement('div');
+        div.className = 'msg';
+        div.innerHTML = '<b>You:</b>' + escapeHtml(text);
+        messagesDiv.appendChild(div);
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+      }
+
+      function addBotMessage(data) {
+        const div = document.createElement('div');
+        div.className = 'msg';
+
+        let html = '<b>Bot:</b>' + escapeHtml(data.answer);
+
+        const meta = [];
+        if (data.toolsUsed?.length)
+          meta.push('Tools: ' + data.toolsUsed.join(', '));
+        if (data.sources?.length)
+          meta.push('Sources: ' + data.sources.join(', '));
+        meta.push('Session: ' + data.sessionId);
+        meta.push(data.timestamp);
+
+        html += '<div class="meta">' + meta.join(' | ') + '</div>';
+        html +=
+          '<details><summary>Raw JSON</summary><div class="raw">' +
+          escapeHtml(JSON.stringify(data, null, 2)) +
+          '</div></details>';
+
+        div.innerHTML = html;
+        messagesDiv.appendChild(div);
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+      }
+
+      function escapeHtml(text) {
+        const d = document.createElement('div');
+        d.textContent = text;
+        return d.innerHTML;
+      }
+
+      chatForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const msg = messageInput.value.trim();
+        if (!msg) return;
+
+        addUserMessage(msg);
+        messageInput.value = '';
+        messageInput.disabled = true;
+
+        try {
+          const res = await fetch('/api/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: msg, sessionId }),
+          });
+          const data = await res.json();
+
+          sessionId = data.sessionId;
+          sessionStorage.setItem('chatSessionId', sessionId);
+
+          addBotMessage(data);
+        } catch (err) {
+          const div = document.createElement('div');
+          div.className = 'msg';
+          div.innerHTML = '<b>Error:</b> ' + escapeHtml(err.message);
+          messagesDiv.appendChild(div);
+        }
+
+        messageInput.disabled = false;
+        messageInput.focus();
+      });
+
+      fileInput.addEventListener('change', async () => {
+        const file = fileInput.files[0];
+        if (!file) return;
+
+        uploadStatus.textContent = 'Uploading...';
+        const form = new FormData();
+        form.append('file', file);
+
+        try {
+          const res = await fetch('/api/upload', {
+            method: 'POST',
+            body: form,
+          });
+          const data = await res.json();
+          uploadStatus.textContent = `Uploaded: ${data.filename} (${data.chunks} chunks)`;
+        } catch (err) {
+          uploadStatus.textContent = 'Upload failed: ' + err.message;
+        }
+
+        fileInput.value = '';
+      });
+
+      messageInput.focus();
+    </script>
+  </body>
+</html>
